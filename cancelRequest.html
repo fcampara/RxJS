@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-compatible" content="ie=edge">
+
+  <title>Document</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/rxjs/6.5.4/rxjs.umd.min.js"></script>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      height: 100vh;
+    }
+    .btn.red {
+      background: red;
+    }
+
+    .btn {
+      margin-bottom: 32px;
+      background: gray;
+      width: 220px;
+      height: 60px;
+      font-size: 18px;
+      color: white;
+    }
+  </style>
+</head>
+
+<body>
+  <button id="b1" class="btn red" style="display: none;">Parar request</button>
+  <button id="b2" class="btn">Fazer request</button>
+  <div id="content"></div>
+  <script>
+    const { fromEvent, ajax: { ajax }, of, race } = rxjs;
+    const { tap, switchMap, pluck } = rxjs.operators
+
+    const api = (response, delay = 1000) => ajax(`http://localhost:5200/response/${JSON.stringify(response)}/delay/${delay}`)
+
+    const content = document.querySelector('#content')
+    const btnStop = document.querySelector('#b1')
+    const btnStart = document.querySelector('#b2')
+
+    const btnStart$ = fromEvent(btnStart, 'click')
+    const btnStop$ = fromEvent(btnStop, 'click')
+
+    const setContent = text => content.innerHTML = text
+    const request = api({ data: 'Resposta da API!'}, 2000).pipe(
+      pluck('response', 'data'),
+      tap(setContent)
+    )
+    const stopRequest = btnStop$.pipe(
+      tap(() => setContent('Requisição cancelada'))
+    )
+    const requesting = bool => {
+      btnStart.style = showElement(!bool)
+      btnStop.style = showElement(bool)
+    }
+    const showElement = bool => bool ? 'display: block' : 'display: none'
+
+    btnStart$.pipe(
+      tap(() => {
+        requesting(true)
+        setContent('Carregando....')
+      }),
+      switchMap(() => race(request, stopRequest)),
+      tap(() => requesting(false))
+    ).subscribe()
+
+  </script>
+</body>
+
+</html>

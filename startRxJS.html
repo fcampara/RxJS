@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <style>
+      .container {
+        display: flex;
+        flex-direction: column;
+      }
+
+      button {
+        width: 500px;
+        margin-bottom: 24px;
+        height: 40px;
+        font-size: 16px;
+      }
+    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-compatible" content="ie=edge">
+    <title>Document</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/rxjs/6.5.4/rxjs.umd.min.js"></script>
+  </head>
+  <body>
+    <div class="container">
+    </div>
+    <script>
+      const { Observable, BehaviorSubject, ReplaySubject, AsyncSubject, of, from, interval, range, generate, defer, bindCallback } = rxjs
+      const { share, take } = rxjs.operators
+
+      function test01() {
+        console.clear()
+        console.log('Teste 01 - Promise retorno único x Observable retorno múltiplos')
+        console.log('Promise')
+        new Promise(resolve => {
+          resolve(1)
+          resolve(2)
+        }).then(num => console.log('Promise: ', num))
+
+        console.log('Observable')
+        Observable.create((observer) => {
+          observer.next(1)
+          observer.next(2)
+        }).subscribe(num => console.log('Observable: ', num))
+
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test02() {
+        console.clear()
+        console.log('Teste 02 - Promise execução Eager x Observable execução Lazy')
+        // Exemplo que a promise por mas que não seja chamada um then ela executa seu bloco de códgio interno
+        new Promise(resolve => {
+          console.log('Iniciando a promise')
+          resolve(1)
+          resolve(2)
+        })
+
+        // Observable não executa seu bloco interno
+        const observable = Observable.create((observer) => {
+          console.log('Iniciando o Observable')
+          observer.next(1)
+          observer.next(2)
+        })
+
+        console.log('Iniciando timeout de 1 seg')
+        setTimeout(() => {
+          observable.subscribe(num => console.log('Observable: ', num))
+        }, 1000)
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test03() {
+        console.clear()
+        console.log('Teste 03 - Promise unicast x Observable multicast')
+        // Exemplo que a promise só retorna um mesmo valor, diferente o observable inicia duas vezes o mesmo processo
+        // No observable o valor é apenas emitido a partir do momento que eu me subscrevo
+        // Na promise é emitido um único valor, mas o estado é compartilhado, a execução acontece apenas uma vez
+        const promise = new Promise(resolve => {
+          console.log('Iniciando a Promise')
+          setTimeout(() => resolve(1), 3000)
+        })
+
+
+        const observer = Observable.create((observer) => {
+          console.log('Iniciando o observable')
+          setTimeout(() => observer.next(1), 3000)
+        })
+
+        promise.then(num => console.log('Promise', num))
+        observer.subscribe(num => console.log('Observable: ', num))
+
+        console.log('Iniciando timeout de 2 seg  ')
+        setTimeout(() => {
+          observer.subscribe(num => console.log('Observable', num ))
+        }, 2000)
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test04() {
+        console.clear()
+        console.log('Teste 04 - Promise unicast x Observable unicast ')
+        const promise = new Promise(resolve => {
+          console.log('Iniciando a Promise')
+          setTimeout(() => resolve(1), 3000)
+        })
+
+        // Com o share ele terá o estado compartilhado
+        const observer = Observable.create((observer) => {
+          console.log('Iniciando o observable')
+          setTimeout(() => observer.next(1), 3000)
+        }).pipe(
+          share()
+        )
+
+        promise.then(num => console.log('Promise', num))
+        observer.subscribe(num => console.log('Observable: ', num))
+
+        console.log('Iniciando timeout de 2 seg  ')
+        setTimeout(() => {
+          observer.subscribe(num => console.log('Observable', num))
+        }, 2000)
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test05() {
+        console.clear()
+        console.log('Teste 05 - Promise assincronas x Observable sincronas')
+        const promise = new Promise(resolve => {
+          console.log('Iniciando a Promise')
+          setTimeout(() => resolve(1), 3000)
+        })
+
+        // Primeiro tenta resolver todos os resultados sincronos e depois os assincronos
+        const observer = Observable.create((observer) => {
+          console.log('Iniciando o observable')
+          observer.next(1)
+          setTimeout(() => observer.next(6), 3000)
+          observer.next(2)
+          observer.next(3)
+          observer.next(4)
+          observer.next(5)
+        })
+
+        promise.then(num => console.log('Promise', num))
+        console.log('Depois da promise')
+        observer.subscribe(num => console.log('Observable: ', num))
+        console.log('Depois do observable')
+
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test06() {
+        console.clear()
+        console.log('Teste 06 - Promise não cancelável x Observable cancelável')
+
+        // Primeiro tenta resolver todos os resultados sincronos e depois os assincronos
+        const observer = Observable.create((observer) => {
+          console.log('Iniciando o observable')
+          let i = 0
+          const interval = setInterval(() => {
+            console.log('Interval: ', i)
+            observer.next(i++)
+          }, 1000)
+
+          // Se comentar a próxima linha terá a visão de como o subscriber não for cancelado totalmente
+          // Pois se o retorno o unsubscribe não sabe o que finalizar
+          return () => clearInterval(interval)
+        })
+
+        const subscriber = observer.subscribe(num => console.log('Observable: ', num))
+
+        // Timeout pode ser finalizado, mas se não houver um retorno do observable ele continuar rodando em background
+        // podendo gerar um memory leak
+        setTimeout(() => {
+          subscriber.unsubscribe()
+        }, 5000)
+
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test07() {
+        console.clear()
+        console.log('Teste 07 - Funções do subscribe ')
+
+        const observer = Observable.create((observer) => {
+          let i = 0
+          const interval = setInterval(() => observer.next(i++), 1000)
+
+          setTimeout(() => observer.complete(), 5000)
+          // Quando quiser emitir um erro
+          // setTimeout(() => observer.error(new Error('Error')), 5000)
+
+          return () => clearInterval(interval)
+        })
+
+        // Subscribe pode receber três callbacks
+        const subscription = observer.subscribe(
+          num => console.log('Resultado: ', num),
+          err => console.log('Erro'),
+          () => console.log('Completado')
+        )
+
+        // Funciona da mesma forma
+        // observer.subscribe({
+        //   next: num => console.log('Resultado: ', num),
+        //   error: err => console.log('Erro'),
+        //   complete: () => console.log('Completado')
+        // })
+
+        // Caso insere a subscrição nenhuma das callbacks serão invocadas
+        setTimeout(() => subscription.unsubscribe(), 3000)
+
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test08() {
+        console.clear()
+        console.log('Teste 08 - Merge subscribe ')
+
+        const observer1 = Observable.create((observer) => {
+          let i = 0
+          console.log('Iniciando primeiro Obsevable')
+          const interval = setInterval(() => observer.next(i++), 1000)
+          return () => clearInterval(interval)
+        })
+
+        const observer2 = Observable.create((observer) => {
+          let i = 0
+          console.log('Iniciando segundo Obsevable')
+          const interval = setInterval(() => observer.next(i++), 1300)
+          return () => clearInterval(interval)
+        })
+
+        // Subscribe pode receber três callbacks
+        const subscription1 = observer1.subscribe({
+          next: num => console.log('Primeiro Observer: ', num),
+          complete: () => console.log('Completado observable 1')
+        })
+
+        const subscription2 = observer2.subscribe({
+          next: num => console.log('Segundo Observer: ', num),
+          complete: () => console.log('Completado observable 2')
+        })
+
+        subscription1.add(subscription2)
+        //Também pode ser utilizado o remove
+        // subscription1.remove(subscription2)
+
+        setTimeout(() => subscription1.unsubscribe(), 3000)
+
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test09() {
+        console.clear()
+        console.log('Teste 09 - Behavior Subjects')
+        // BehaviorSubject, ele pode iniciar com valor e sempre mantem o ultimo valor para ser emetido a um novo subscriber
+        const sub = new BehaviorSubject(0)
+
+        sub.next(1)
+        sub.next(2)
+        sub.next(3)
+        sub.next(4)
+
+        sub.subscribe({
+          next: num => console.log('Subscription 1 next: ', num)
+        })
+
+        sub.next(5)
+        sub.next(6)
+
+        sub.subscribe({
+          next: num => console.log('Subscription 2 next: ', num)
+        })
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test10() {
+        console.clear()
+        console.log('Teste 10 - Replay Subjects')
+        // Replay subject, eles armazenam um quantidade definida de valores emitidos
+        // Pode definir quantos valores emitidos vai propagar para quem se subscrever, pode definir o tempo que será armazenado a informação
+        const sub = new ReplaySubject(4, 500)
+
+        sub.next(1)
+        sub.next(2)
+        sub.next(3)
+        sub.next(4)
+
+        sub.subscribe({
+          next: num => console.log('Subscription 1 next: ', num)
+        })
+
+        sub.next(5)
+        sub.next(6)
+
+        setTimeout(() => {
+          sub.subscribe({
+            next: num => console.log('Subscription 2 next: ', num)
+          })
+        }, 500)
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test11() {
+        console.clear()
+        console.log('Teste 11 - Async Subjects')
+        // Async subject, ele apenas recebe a ultima emissão do subject, somente quando for completado e recebe apenas a ultima emissão
+        // Mantem em memória a ultima emissão
+        const sub = new AsyncSubject()
+
+        sub.next(1)
+        sub.next(2)
+        sub.next(3)
+        sub.next(4)
+
+        sub.subscribe({
+          next: num => console.log('Subscription 1 next: ', num)
+        })
+
+        sub.next(5)
+        sub.next(6)
+
+        setTimeout(() => {
+          sub.subscribe({
+            next: num => console.log('Subscription 2 next: ', num)
+          })
+        }, 500)
+
+        sub.complete()
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test12() {
+        console.clear()
+        console.log('Teste 12 - Operador of')
+        // Pode receber valores separados por vírgulas, porêm os valores devem ser valores "finais" (Boolean, String, Integer...)
+        of(1, true, 'string', [1,2,3])
+          .subscribe(
+            v => console.log(v)
+          )
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test13() {
+        console.clear()
+        console.log('Teste 13 - Operador from')
+        // Transforma estrutura de dados e transforma para observable, Promise, Array, Generator, Map e Observables
+        console.log('Estrutura de Array')
+        from([1, 2, 3])
+          .subscribe(
+            v => console.log(v)
+          )
+
+        console.log('Estrutura de Promise')
+        from(Promise.resolve(1))
+          .subscribe(
+            v => console.log(v)
+          )
+
+        function* g() {
+          let i = 1
+          while(true)
+            yield i++
+        }
+
+        console.log('Estrutura de Generator')
+        from(g())
+          .pipe(
+            take(10) // Define quantas vezes vai ser capturado
+          )
+          .subscribe(
+            v => console.log(v)
+          )
+
+        console.log('Estrutura de Observables')
+        from(of([1,2,3,4], true, 'string'))
+          .pipe(
+            take(10) // Define quantas vezes vai ser capturado
+          )
+          .subscribe(
+            v => console.log(v)
+          )
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test14() {
+        console.clear()
+        console.log('Teste 14 - Operador interval')
+        // Definir a quantidade de intervalos que serão emitidos valores
+        interval(1000)
+          .pipe(
+            take(10)
+          )
+          .subscribe(
+            v => console.log(v)
+          )
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test15() {
+        console.clear()
+        console.log('Teste 14 - Operador range')
+        // Range, pode emitir valores númerios com determinados números inicias e finais (Valor inicial, mais quantos números)
+        range(1000, 10)
+          .pipe(
+            take(10)
+          )
+          .subscribe(
+            v => console.log(v)
+          )
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test16() {
+        console.clear()
+        console.log('Teste 16 - Operador generate')
+        // Generate, valor inicial, função que cria condição de parada, função de incremento
+        generate(0, x => x < 10, x => x + 1)
+          .subscribe(
+            v => console.log(v)
+          )
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test17(value) {
+        console.clear()
+        console.log('Teste 17 - Operador defer')
+        // DEFER, Encapsula uma função, mas só sera executada apartir de um momento que for executado um subscribe, 'Observable condicional'
+        const functionDefer = a => defer(() => {
+          return a > 10 ? of(1) : of(2)
+        })
+
+        functionDefer(value).subscribe(
+            v => console.log(v)
+          )
+        console.log('----------------------------------------------------------------')
+      }
+
+      function test18() {
+        console.clear()
+        console.log('Teste 18 - Operador bindCallback')
+        // bindCallback, Cria observables apartir de funções que retornam callback. Quando tem a necessidade
+
+        const a = (a, cb) => {
+          cb(a)
+        }
+
+        // Reutilizar funções, por exemplo trabalha com o axios para retornar obsvables
+        // Para utilizar no node devemos utilizar o bindNodeCallBack
+        bindCallback(a)(10)
+          .subscribe(
+            v => console.log(v)
+          )
+
+        console.log('----------------------------------------------------------------')
+      }
+
+      [
+        'Promise retorno único x Observable retorno múltiplos',
+        'Promise execução Eager x Observable execução Lazy',
+        'Promise unicast x Observable multicast',
+        'Promise unicast x Observable unicast',
+        'Promise assincronas x Observable sincronas',
+        'Promise não cancelável x Observable cancelável',
+        'Funções do subscribe',
+        'Merge subscribe',
+        'Behavior Subjects',
+        'Replay Subjects',
+        'Async Subjects',
+        'Operadores "of"',
+        'Operadores "from"',
+        'Operadores "interval"',
+        'Operadores "range"',
+        'Operadores "generate"',
+        'Operadores "defer"',
+        'Operadores "bindingCallback"',
+      ].forEach((title, index) => {
+        const position = String(index + 1).padStart(2, 0)
+        const key = `test${position}`
+        const btn = document.createElement('BUTTON')
+        btn.setAttribute('id', key)
+        const text = document.createTextNode(`Teste ${position} - ${title}`)
+        btn.appendChild(text)
+        document.querySelector('.container').appendChild(btn)
+        document.querySelector(`#${key}`).addEventListener('click', window[key])
+      })
+    </script>
+  </body>
+</html>
+

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-compatible" content="ie=edge">
+
+  <title>Document</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/rxjs/6.5.4/rxjs.umd.min.js"></script>
+  <style>
+  </style>
+</head>
+
+<body>
+  <script>
+    const { ajax: { ajax }, of } = rxjs;
+    const { mergeMap, concatMap, pluck, switchMap, exhaustMap, combineAll } = rxjs.operators
+
+    // Itens para concorrências
+    // mergeMap => Ele retorna todos os valores e coloca em paralelo
+    // concantMap => Executa uma por vez
+    // switchMap => Executa apenas o último e cancela os anteriores
+    // exhaustMap => Executa apenas a primeira e cancela as próximas
+
+    const api = (response, delay = 1000) => ajax(`http://localhost:5200/response/${JSON.stringify(response)}/delay/${delay}`)
+
+    const a = api({ data: "A" })
+    const b = api({ data: "B" })
+    const c = api({ data: "C" }, 800)
+    const d = api({ data: "D" }, 1800)
+    const e = api({ data: "E" }, 1200)
+    const f = api({ data: "F" }, 2800)
+    const g = api({ data: "G" }, 2800)
+
+    // of(a, b, c, d, e, f, g)
+    //   .pipe(
+    //     mergeMap(e => e), // Pode defiinir quantos valores pode fazer em paralelo
+    //     pluck('response', 'data'),
+    //     combineAll() // Uni todos os resultados
+    //   )
+    //   .subscribe(
+    //     x => console.log(x),
+    //     err => console.log(err),
+    //     _ => console.log('Complete')
+    //   )
+
+    // of(a, b, c, d, e, f, g)
+    //   .pipe(
+    //     concatMap(e => e),
+    //     pluck('response', 'data')
+    //   )
+    //   .subscribe(
+    //     x => console.log(x),
+    //     err => console.log(err),
+    //     _ => console.log('Complete')
+    //   )
+
+    // of(a, b, c, d, e, f, g)
+    //   .pipe(
+    //     switchMap(e => e),
+    //     pluck('response', 'data')
+    //   )
+    //   .subscribe(
+    //     x => console.log(x),
+    //     err => console.log(err),
+    //     _ => console.log('Complete')
+    //   )
+
+    of(a, b, c, d, e, f, g)
+      .pipe(
+        exhaustMap(e => e),
+        pluck('response', 'data')
+      )
+      .subscribe(
+        x => console.log(x),
+        err => console.log(err),
+        _ => console.log('Complete')
+      )
+
+  </script>
+</body>
+
+</html>

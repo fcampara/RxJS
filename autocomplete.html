@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-compatible" content="ie=edge">
+
+  <title>Document</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/rxjs/6.5.4/rxjs.umd.min.js"></script>
+  <style>
+  </style>
+</head>
+
+<body>
+  <div class="content">
+    <input type="text" placeholder="Pais..."/>
+    <ul></ul>
+  </div>
+  <script>
+    const { fromEvent, ajax: { ajax }, of } = rxjs;
+    const { pluck, map, debounceTime, switchMap, catchError, distinctUntilChanged, startWith } = rxjs.operators
+
+    const input = fromEvent(document.querySelector('input'), 'input')
+    const ul = document.querySelector('ul')
+
+    const showResults = res => (
+      ul.innerHTML = res.map(e => `<li>${e}</li>`).join('')
+    )
+
+    const searchCountriesApi = keywords => ajax(`https://restcountries.eu/rest/v2/name/${keywords}?fields=name`).pipe(
+      pluck('response'), // Extrai uma propriedade
+      map(res => res.map(e => e.name))
+    )
+
+    input.pipe(
+      debounceTime(300),
+      pluck('target', 'value'),
+      map(e => e.trim()),
+      distinctUntilChanged(),
+      switchMap(keywords => {
+        if (!keywords || keywords.length < 3) return of([])
+        return searchCountriesApi(keywords)
+      }),
+      catchError((err, source) => source.pipe(startWith([])))
+    )
+    .subscribe(showResults)
+
+  </script>
+</body>
+
+</html>
